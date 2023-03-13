@@ -70,6 +70,7 @@ class BaselineAgent(ArtificialBrain):
         self._recentVic = None
         self._receivedMessages = []
         self._moving = False
+        self._botSavedVictimsCUSTOM = []
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -620,6 +621,7 @@ class BaselineAgent(ArtificialBrain):
                     self._phase = Phase.PLAN_PATH_TO_DROPPOINT
                     if self._goalVic not in self._collectedVictims:
                         self._collectedVictims.append(self._goalVic)
+                        self._botSavedVictimsCUSTOM.append(self._goalVic)
                     self._carrying = True
                     return CarryObject.__name__, {'object_id': self._foundVictimLocs[self._goalVic]['obj_id'], 'human_name':self._humanName}
 
@@ -799,30 +801,55 @@ class BaselineAgent(ArtificialBrain):
         '''
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
+        currentCompetence = trustBeliefs[self._humanName]['competence']
+        currentWillingness = trustBeliefs[self._humanName]['willingness']
+        baseAwardCompetence = self.sigmoidDiv7(currentCompetence)
+        baseAwardWillingness = self.sigmoidDiv7(currentWillingness)
+        print(currentCompetence, currentWillingness, "current comp, current will")
+        print(baseAwardCompetence, baseAwardWillingness, "award comp, award will")
         # Update the trust value based on for example the received messages
         for message in receivedMessages:
             # Increase agent trust in a team member that rescued a victim
+            """
+            Competence:
+            - When the bot has found a victim, lower half the competence amount that would be added
+            When bot goes to a room to help a critical victim but they aren’t there, lower the competence by a lot
+            When bot goes to a room to help a mildly injured victim but they aren’t there, lower the competence
+            When bot checks dropped victims and the victim is not there, lower competence by a lot
+            When human agent has collected a (mildly injured) victim
+            When human removes an obstacle (a small rock)
+            """
 
             if 'Collect' in message:
-                trustBeliefs[self._humanName]['competence']+=0.10
+                currentCompetence += baseAwardCompetence
+                print(currentCompetence, "collect")
                 # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                currentCompetence = np.clip(currentCompetence, -1, 1)
             #if 'Remove' in message:
              #   if ''
                     #trustBeliefs
 
             if 'Found' in message:
-                trustBeliefs[self._humanName]['competence'] += 0.05
-                print(trustBeliefs[self._humanName]['competence'])
+                currentCompetence += baseAwardCompetence
+                print(currentCompetence, "found")
                 # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                currentCompetence = np.clip(currentCompetence, -1, 1)
+            # if 'Search' in message:
 
-            #if 'Search' in message:
+
+
+        # When the bot has found a victim, lower half the competence amount that would be added
+        for vic in self._botSavedVictimsCUSTOM:
+            currentCompetence -= baseAwardCompetence/2
+        print("current state: ", currentCompetence)
+
+        print("\n")
+
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name','competence','willingness'])
-            csv_writer.writerow([self._humanName,trustBeliefs[self._humanName]['competence'],trustBeliefs[self._humanName]['willingness']])
+            csv_writer.writerow([self._humanName,currentCompetence,trustBeliefs[self._humanName]['willingness']])
 
         return trustBeliefs
 
@@ -852,7 +879,6 @@ class BaselineAgent(ArtificialBrain):
                 dists[room] = utils.get_distance(currentDoor, loc)
             if currentDoor == None:
                 dists[room] = utils.get_distance(agent_location, loc)
-
         return min(dists, key=dists.get)
 
     def _efficientSearch(self, tiles):
@@ -873,3 +899,6 @@ class BaselineAgent(ArtificialBrain):
             else:
                 locs.append((x[i], max(y)))
         return locs
+
+    def sigmoidDiv7(self, x):
+        return (1 / (1 + np.exp(-x))) / 7
