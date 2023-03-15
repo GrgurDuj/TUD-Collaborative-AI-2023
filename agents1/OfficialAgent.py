@@ -70,7 +70,9 @@ class BaselineAgent(ArtificialBrain):
         self._recentVic = None
         self._receivedMessages = []
         self._moving = False
-        self._botSavedVictimsCUSTOM = []
+        self._botSavedVictims_CUSTOM = []
+        self._searchLogDict_CUSTOM = {}
+        self._allMessages_CUSTOM = []
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -92,6 +94,7 @@ class BaselineAgent(ArtificialBrain):
             for member in self._teamMembers:
                 if mssg.from_id == member and mssg.content not in self._receivedMessages:
                     self._receivedMessages.append(mssg.content)
+                    self._allMessages_CUSTOM.append((mssg.content, "human"))
         # Process messages from team members
         self._processMessages(state, self._teamMembers, self._condition)
         # Initialize and update trust beliefs for team members
@@ -232,7 +235,7 @@ class BaselineAgent(ArtificialBrain):
                     self._phase = Phase.FIND_NEXT_GOAL
                 # If there are still areas to search, define which one to search next
                 else:
-                    # Identify the closest door when the agent did not search any areas yet
+                    # Identify the closest door when the agent did not searxch any areas yet
                     if self._currentDoor == None:
                         # Find all area entrance locations
                         self._door = state.get_room_doors(self._getClosestRoom(state, unsearchedRooms, agent_location))[0]
@@ -293,6 +296,7 @@ class BaselineAgent(ArtificialBrain):
                     if self._goalVic not in self._foundVictims and not self._remove or not self._goalVic and not self._remove :
                         self._sendMessage('Moving to ' + str(self._door['room_name']) + ' because it is the closest unsearched area.', 'RescueBot')
                     self._currentDoor = self._door['location']
+                    self._searchLogDict_CUSTOM[self._door['room_name']] = len(self._receivedMessages)
                     # Retrieve move actions to execute
                     action = self._navigator.get_move_action(self._state_tracker)
                     if action != None:
@@ -621,7 +625,7 @@ class BaselineAgent(ArtificialBrain):
                     self._phase = Phase.PLAN_PATH_TO_DROPPOINT
                     if self._goalVic not in self._collectedVictims:
                         self._collectedVictims.append(self._goalVic)
-                        self._botSavedVictimsCUSTOM.append(self._goalVic)
+                        self._botSavedVictims_CUSTOM.append(self._goalVic)
                     self._carrying = True
                     return CarryObject.__name__, {'object_id': self._foundVictimLocs[self._goalVic]['obj_id'], 'human_name':self._humanName}
 
@@ -801,47 +805,95 @@ class BaselineAgent(ArtificialBrain):
         '''
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
+
+        """Competence:
+        - When the bot has found a victim, lower half the competence amount that would be added
+        - When bot goes to a room to help a critical victim but they aren’t there, lower the competence by a lot
+        - When bot goes to a room to help a mildly injured victim but they aren’t there, lower the competence
+        When bot checks dropped victims and the victim is not there, lower competence by a lot
+        - When human agent has collected a (mildly injured) victim
+        When human removes an obstacle (a small rock)
+        - human searches a room that robot already searched
+        """
+
         currentCompetence = trustBeliefs[self._humanName]['competence']
         currentWillingness = trustBeliefs[self._humanName]['willingness']
         baseAwardCompetence = self.sigmoidDiv7(currentCompetence)
         baseAwardWillingness = self.sigmoidDiv7(currentWillingness)
-        print(currentCompetence, currentWillingness, "current comp, current will")
-        print(baseAwardCompetence, baseAwardWillingness, "award comp, award will")
+        # print(currentCompetence, currentWillingness, "current comp, current will")
+        # print(baseAwardCompetence, baseAwardWillingness, "award comp, award will")
         # Update the trust value based on for example the received messages
-        for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
-            """
-            Competence:
-            - When the bot has found a victim, lower half the competence amount that would be added
-            When bot goes to a room to help a critical victim but they aren’t there, lower the competence by a lot
-            When bot goes to a room to help a mildly injured victim but they aren’t there, lower the competence
-            When bot checks dropped victims and the victim is not there, lower competence by a lot
-            When human agent has collected a (mildly injured) victim
-            When human removes an obstacle (a small rock)
-            """
+        # print(self._searchLogDict_CUSTOM)
+        # print(self._sendMessages)
+        # print(self._allMessages_CUSTOM)
 
-            if 'Collect' in message:
+        
+        for idx, (message, sender) in enumerate(self._allMessages_CUSTOM):
+            if idx != 0:
+                (prev_message, prev_sender) = self._allMessages_CUSTOM[idx-1]
+                if sender == "human" and "Continue" in message:
+                    if prev_sender == "robot":
+                        if "critically" in prev_message:
+                            currentWillingness -= 0.4 - baseAwardWillingness
+                        if "mildly" in prev_message:
+                            currentWillingness -= 0.2 - baseAwardWillingness
+                        if "rock" in prev_message and "distance between us: close" in prev_message:
+                            currentWillingness -= 0.15 - baseAwardWillingness
+                        # if "tree" in prev_message:
+                        #     currentWillingness -= ??? #TODO
+                # if sender == "human" and "Rescue alone" in message:
+                #     #TODO
+                # if sender == "human" and "Rescue together" in message:
+                #     #TODO
+                # if sender == "human" and "Remove alone" in message:
+                #     #TODO
+                # if sender == "human" and "Remove together" in message:
+                #     #TODO
+                
+
+                
+
+
+        for idx, message in enumerate(self._sendMessages):
+            # print(message)
+            # decrease competence if human lies about finding a victim in an area. (critical is higher pentalty than mild)
+            if "not present" in message:
+                if "critically" in message:
+                    currentCompetence -= 0.4 - baseAwardCompetence
+                if "mildly" in message: #only happens with 'weak' human
+                    currentCompetence -= 0.2 - baseAwardCompetence
+        
+        for idx, message in enumerate(receivedMessages):
+            # print(message)
+            # print(self._tosearch)
+            # Increase agent trust in a team member that rescued a victim
+            
+            #TODO: use trustBeliefs[self._humanName]['competence'] instead of currentCompetence
+            if 'Collect' in message: #this will only be called for mildly injured victim (don't need to specify)
                 currentCompetence += baseAwardCompetence
-                print(currentCompetence, "collect")
+                # print(currentCompetence, "collect")
                 # Restrict the competence belief to a range of -1 to 1
                 currentCompetence = np.clip(currentCompetence, -1, 1)
-            #if 'Remove' in message:
-             #   if ''
-                    #trustBeliefs
+            # if 'Remove' in message:
 
             if 'Found' in message:
                 currentCompetence += baseAwardCompetence
-                print(currentCompetence, "found")
+                # print(currentCompetence, "found")
                 # Restrict the competence belief to a range of -1 to 1
                 currentCompetence = np.clip(currentCompetence, -1, 1)
-            # if 'Search' in message:
-
+            if 'Search' in message:
+                room_name = "area " + str(message.split(' ')[-1])
+                # human searches a room that robot already searched. decrease competence (bc human not paying attention).
+                if room_name in self._searchLogDict_CUSTOM:
+                    if self._searchLogDict_CUSTOM[room_name] <= idx:
+                        currentCompetence -= baseAwardCompetence
 
 
         # When the bot has found a victim, lower half the competence amount that would be added
-        for vic in self._botSavedVictimsCUSTOM:
+        for vic in self._botSavedVictims_CUSTOM:
             currentCompetence -= baseAwardCompetence/2
-        print("current state: ", currentCompetence)
+        print("current competence: ", currentCompetence)
+        print("current willingness: ", currentWillingness)
 
         print("\n")
 
@@ -861,6 +913,7 @@ class BaselineAgent(ArtificialBrain):
         if msg.content not in self.received_messages_content and 'Our score is' not in msg.content:
             self.send_message(msg)
             self._sendMessages.append(msg.content)
+            self._allMessages_CUSTOM.append((msg.content, "robot"))
         # Sending the hidden score message (DO NOT REMOVE)
         if 'Our score is' in msg.content:
             self.send_message(msg)
