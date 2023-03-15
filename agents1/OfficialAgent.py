@@ -96,7 +96,7 @@ class BaselineAgent(ArtificialBrain):
         self._processMessages(state, self._teamMembers, self._condition)
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
-        self._trustBelief(self._teamMembers, trustBeliefs, self._folder, self._receivedMessages)
+        self._trustBelief(self._teamMembers, trustBeliefs, self._folder, self._receivedMessages, state)
 
         # Check whether human is close in distance
         if state[{'is_human_agent': True}]:
@@ -137,6 +137,11 @@ class BaselineAgent(ArtificialBrain):
 
         # Ongoing loop untill the task is terminated, using different phases for defining the agent's behavior
         while True:
+            # {'nr_ticks': 1377, 'curr_tick_timestamp': 1678873033546, 'grid_shape': [25, 24],
+            # 'tick_duration': 0.1, 'team_members': ['rescuebot', 'try6'], 'world_ID': 'world_1',
+            # 'vis_settings': {'vis_bg_clr': '#9a9083', 'vis_bg_img': None}}
+            trustBeliefs[self._humanName]['willingness'] = state['World']['nr_ticks'] * 0.00001
+            print(trustBeliefs[self._humanName]['willingness'])
             if Phase.INTRO == self._phase:
                 # Send introduction message
                 self._sendMessage('Hello! My name is RescueBot. Together we will collaborate and try to search and rescue the 8 victims on our right as quickly as possible. \
@@ -797,15 +802,13 @@ class BaselineAgent(ArtificialBrain):
                     trustBeliefs[self._humanName] = {'competence': competence, 'willingness': willingness}
         return trustBeliefs
 
-    def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
+    def _trustBelief(self, members, trustBeliefs, folder, receivedMessages, state):
         '''
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         '''
-        currentCompetence = trustBeliefs[self._humanName]['competence']
-        currentWillingness = trustBeliefs[self._humanName]['willingness']
-        baseAwardCompetence = self.sigmoidDiv7(currentCompetence)
-        baseAwardWillingness = self.sigmoidDiv7(currentWillingness)
-        print(currentCompetence, currentWillingness, "current comp, current will")
+        baseAwardCompetence = self.sigmoidDiv7(trustBeliefs[self._humanName]['competence'])
+        baseAwardWillingness = self.sigmoidDiv7(trustBeliefs[self._humanName]['willingness'])
+        print(trustBeliefs[self._humanName]['competence'], trustBeliefs[self._humanName]['willingness'], "current comp, current will")
         print(baseAwardCompetence, baseAwardWillingness, "award comp, award will")
         # Update the trust value based on for example the received messages
         for message in receivedMessages:
@@ -819,29 +822,52 @@ class BaselineAgent(ArtificialBrain):
             When human agent has collected a (mildly injured) victim
             When human removes an obstacle (a small rock)
             """
-
             if 'Collect' in message:
-                currentCompetence += baseAwardCompetence
-                print(currentCompetence, "collect")
+                trustBeliefs[self._humanName]['competence'] += baseAwardCompetence
+                print(trustBeliefs[self._humanName]['competence'], "collect")
                 # Restrict the competence belief to a range of -1 to 1
-                currentCompetence = np.clip(currentCompetence, -1, 1)
-            #if 'Remove' in message:
-             #   if ''
-                    #trustBeliefs
+                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+            if 'Remove' in message:
+                print("remove")
+                for info in state.values():
+                    if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance']:
+                        if 'tree' in info['obj_id']:
+                            # human asked for tree removal - shows motivation
+                            trustBeliefs[self._humanName]['willingness'] += baseAwardWillingness
+                        if 'stone' in info['obj_id']:
+                            # stone small
+                            if self._distanceHuman == "close" and "together" in message:
+                                trustBeliefs[self._humanName]['willingness'] += baseAwardWillingness
+                                trustBeliefs[self._humanName]['competence'] += baseAwardCompetence
+                            if self._distanceHuman == "far":
+                                trustBeliefs[self._humanName]['competence'] += baseAwardCompetence # maybe should be 0
+                        if 'rock' in info['obj_id']:
+                            # rock big - bot has to wait for person to show up
+                            #TODO implement waiting system based on tick from state to calculate for lazy person
+                            trustBeliefs[self._humanName]['willingness'] += baseAwardWillingness
+
+
+                        print("DOORDOORDOORDOORDOORDOOR")
+                        print("DOORDOORDOORDOORDOORDOOR")
+                        print("DOORDOORDOORDOORDOORDOOR")
+
+# reduce stuff every tick by a little instead of the victim difference stuff
+# competence should differentiate between weak strong and normal
+# willingness should differentiate between lazy and working
 
             if 'Found' in message:
-                currentCompetence += baseAwardCompetence
-                print(currentCompetence, "found")
+                trustBeliefs[self._humanName]['competence'] += baseAwardCompetence
+                print(trustBeliefs[self._humanName]['competence'], "found")
                 # Restrict the competence belief to a range of -1 to 1
-                currentCompetence = np.clip(currentCompetence, -1, 1)
-            # if 'Search' in message:
+                trustBeliefs[self._humanName]['competence'] = np.clip(trustBeliefs[self._humanName]['competence'], -1, 1)
+                # if 'Search' in message:
 
 
 
         # When the bot has found a victim, lower half the competence amount that would be added
         for vic in self._botSavedVictimsCUSTOM:
-            currentCompetence -= baseAwardCompetence/2
-        print("current state: ", currentCompetence)
+            trustBeliefs[self._humanName]['competence'] -= baseAwardCompetence/2
+        print("current competence: ", trustBeliefs[self._humanName]['competence'])
 
         print("\n")
 
@@ -849,7 +875,7 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name','competence','willingness'])
-            csv_writer.writerow([self._humanName,currentCompetence,trustBeliefs[self._humanName]['willingness']])
+            csv_writer.writerow([self._humanName,trustBeliefs[self._humanName]['competence'],trustBeliefs[self._humanName]['willingness']])
 
         return trustBeliefs
 
