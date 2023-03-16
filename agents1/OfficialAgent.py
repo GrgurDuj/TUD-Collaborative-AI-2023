@@ -95,11 +95,12 @@ class BaselineAgent(ArtificialBrain):
                 if mssg.from_id == member and mssg.content not in self._receivedMessages:
                     self._receivedMessages.append(mssg.content)
                     self._allMessages_CUSTOM.append((mssg.content, "human"))
-        # Process messages from team members
-        self._processMessages(state, self._teamMembers, self._condition)
+
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._teamMembers, self._folder)
         self._trustBelief(self._teamMembers, trustBeliefs, self._folder, self._receivedMessages)
+        # Process messages from team members
+        self._processMessages(state, self._teamMembers, self._condition, trustBeliefs)
 
         # Check whether human is close in distance
         if state[{'is_human_agent': True}]:
@@ -674,7 +675,7 @@ class BaselineAgent(ArtificialBrain):
                 zones.append(place)
         return zones
 
-    def _processMessages(self, state, teamMembers, condition):
+    def _processMessages(self, state, teamMembers, condition, trustbeliefsInProcess):
         '''
         process incoming messages received from the team members
         '''
@@ -694,7 +695,11 @@ class BaselineAgent(ArtificialBrain):
                 if msg.startswith("Search:"):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._searchedRooms:
-                        self._searchedRooms.append(area)
+                        if trustbeliefsInProcess[self._humanName]['competence'] > 0.5 and trustbeliefsInProcess[self._humanName]['willingness'] > 0.5:
+                            self._searchedRooms.append(area)
+                            print("i have added room to memory")
+                        else:
+                            print("i have not added room to memory")
                 # If a received message involves team members finding victims, add these victims and their locations to memory
                 if msg.startswith("Found:"):
                     # Identify which victim and area it concerns
@@ -705,11 +710,19 @@ class BaselineAgent(ArtificialBrain):
                     loc = 'area ' + msg.split()[-1]
                     # Add the area to the memory of searched areas
                     if loc not in self._searchedRooms:
-                        self._searchedRooms.append(loc)
+                        if trustbeliefsInProcess[self._humanName]['competence'] > 0.5 and trustbeliefsInProcess[self._humanName]['willingness'] > 0.5:
+                            self._searchedRooms.append(loc)
+                            print("i have added room to memory")
+                        else:
+                            print("i have not added room to memory")
                     # Add the victim and its location to memory
                     if foundVic not in self._foundVictims:
-                        self._foundVictims.append(foundVic)
-                        self._foundVictimLocs[foundVic] = {'room': loc}
+                        if trustbeliefsInProcess[self._humanName]['competence'] > 0.5 and trustbeliefsInProcess[self._humanName]['willingness'] > 0.5:
+                            self._foundVictims.append(foundVic)
+                            self._foundVictimLocs[foundVic] = {'room': loc}
+                            print("i have added victim to memory")
+                        else:
+                            print("i have not added victim to memory")
                     if foundVic in self._foundVictims and self._foundVictimLocs[foundVic]['room'] != loc:
                         self._foundVictimLocs[foundVic] = {'room': loc}
                     # Decide to help the human carry a found victim when the human's condition is 'weak'
