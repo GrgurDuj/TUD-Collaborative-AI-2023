@@ -836,23 +836,29 @@ class BaselineAgent(ArtificialBrain):
                         if "critically" in prev_message:
                             currentWillingness -= 0.4 - baseAwardWillingness
                         if "mildly" in prev_message:
-                            currentWillingness -= 0.2 - baseAwardWillingness
+                            currentWillingness -= 0.15 - baseAwardWillingness
                         if "rock" in prev_message and "distance between us: close" in prev_message:
                             currentWillingness -= 0.15 - baseAwardWillingness
-                        # if "tree" in prev_message:
-                        #     currentWillingness -= ??? #TODO
-                # if sender == "human" and "Rescue alone" in message:
-                #     #TODO
-                # if sender == "human" and "Rescue together" in message:
-                #     #TODO
+
+                #When human comes to help rescue a critical victim, increase willingness and competence
+                if sender =="human" and "Rescue" in message:
+                    if prev_sender == "robot":
+                        if "critically" in prev_message:
+                            currentCompetence += 2 * baseAwardCompetence
+                            currentWillingness += 0.1 + baseAwardWillingness
+
+                #When human comes to help rescue a mild victim, increase willingness and competence        
+                if sender == "human" and "Rescue together" in message:
+                    currentWillingness += baseAwardWillingness
+                if sender == "human" and "Remove" in message: #removing big rock
+                    currentWillingness += baseAwardWillingness
+
                 # if sender == "human" and "Remove alone" in message:
                 #     #TODO
                 # if sender == "human" and "Remove together" in message:
                 #     #TODO
-                
 
                 
-
 
         for idx, message in enumerate(self._sendMessages):
             # print(message)
@@ -862,25 +868,36 @@ class BaselineAgent(ArtificialBrain):
                     currentCompetence -= 0.4 - baseAwardCompetence
                 if "mildly" in message: #only happens with 'weak' human
                     currentCompetence -= 0.2 - baseAwardCompetence
-        
-        for idx, message in enumerate(receivedMessages):
-            # print(message)
-            # print(self._tosearch)
-            # Increase agent trust in a team member that rescued a victim
-            
-            #TODO: use trustBeliefs[self._humanName]['competence'] instead of currentCompetence
-            if 'Collect' in message: #this will only be called for mildly injured victim (don't need to specify)
-                currentCompetence += baseAwardCompetence
-                # print(currentCompetence, "collect")
-                # Restrict the competence belief to a range of -1 to 1
-                currentCompetence = np.clip(currentCompetence, -1, 1)
-            # if 'Remove' in message:
+            #When all the rooms have been searched but not all victims have been found
+            if "re-search all areas" in message:
+                #I think we should decrease the competence more than the willingness
+                currentCompetence -= 0.5 - baseAwardCompetence
+                currentWillingness -= 0.4 - baseAwardWillingness
 
-            if 'Found' in message:
-                currentCompetence += baseAwardCompetence
-                # print(currentCompetence, "found")
-                # Restrict the competence belief to a range of -1 to 1
-                currentCompetence = np.clip(currentCompetence, -1, 1)
+            #When human asks for help with a tree, increase the willingness
+            if "Removing" in message:
+                if "tree" in message:
+                    currentWillingness += baseAwardWillingness
+
+            if "Found critically" in message:
+                if "because you told me" in message:
+                    currentWillingness += 0.1 + baseAwardWillingness
+            
+            #if human asks for help to remove small stones reduce competence. (weak condition)
+            #increase willingness bc they're willing to do the task (faster in the case of normal/strong)
+            if "Lets remove" in message:
+                if "stones" in message:
+                    currentCompetence -= baseAwardCompetence
+                    currentWillingness += baseAwardWillingness
+            
+        
+        for idx, message in enumerate(receivedMessages):            
+            #TODO: use trustBeliefs[self._humanName]['competence'] instead of currentCompetence
+            if 'Collect' in message: 
+                #this will only be called for mildly injured victim (don't need to specify)
+                currentCompetence += 2* baseAwardCompetence
+                currentWillingness += baseAwardWillingness
+            
             if 'Search' in message:
                 room_name = "area " + str(message.split(' ')[-1])
                 # human searches a room that robot already searched. decrease competence (bc human not paying attention).
@@ -888,20 +905,22 @@ class BaselineAgent(ArtificialBrain):
                     if self._searchLogDict_CUSTOM[room_name] <= idx:
                         currentCompetence -= baseAwardCompetence
 
-
         # When the bot has found a victim, lower half the competence amount that would be added
         for vic in self._botSavedVictims_CUSTOM:
             currentCompetence -= baseAwardCompetence/2
-        print("current competence: ", currentCompetence)
-        print("current willingness: ", currentWillingness)
 
-        print("\n")
+        currentCompetence = np.clip(currentCompetence, -1, 1)
+        currentWillingness = np.clip(currentWillingness, -1, 1)
+        # print("current competence: ", currentCompetence)
+        # print("current willingness: ", currentWillingness)
+
+        # print("\n")
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name','competence','willingness'])
-            csv_writer.writerow([self._humanName,currentCompetence,trustBeliefs[self._humanName]['willingness']])
+            csv_writer.writerow([self._humanName,currentCompetence,currentWillingness])
 
         return trustBeliefs
 
