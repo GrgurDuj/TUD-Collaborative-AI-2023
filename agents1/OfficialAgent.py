@@ -79,7 +79,7 @@ class BaselineAgent(ArtificialBrain):
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
         self._state_tracker = StateTracker(agent_id=self.agent_id)
-        self._navigator = Navigator(agent_id=self.agent_id,action_set=self.action_set, algorithm=Navigator.A_STAR_ALGORITHM)
+        self._navigator = Navigator(agent_id=self.agent_id, action_set=self.action_set, algorithm=Navigator.A_STAR_ALGORITHM)
 
     def filter_observations(self, state):
         # Filtering of the world state before deciding on an action 
@@ -345,14 +345,14 @@ class BaselineAgent(ArtificialBrain):
                             # Tell the human to come over and be idle untill human arrives
                             if not state[{'is_human_agent': True}]:
                                 self._sendMessage('Please come to ' + str(self._door['room_name']) + ' to remove rock.','RescueBot')
-                                # TODO self.waitingForArrival(state['World']['nr_ticks'])
+                                self.waitingForArrival(state['World']['nr_ticks'])
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._sendMessage('Lets remove rock blocking ' + str(self._door['room_name']) + '!','RescueBot')
+                                self.hasArrived(state['World']['nr_ticks'])
                                 return None, {}
-
-                        # Remain idle untill the human communicates what to do with the identified obstacle 
+                        # Remain idle until the human communicates what to do with the identified obstacle
                         else:
                             return None, {}
 
@@ -418,11 +418,12 @@ class BaselineAgent(ArtificialBrain):
                             # Tell the human to come over and be idle untill human arrives
                             if not state[{'is_human_agent': True}]:
                                 self._sendMessage('Please come to ' + str(self._door['room_name']) + ' to remove stones together.','RescueBot')
-                                # TODO self.waitingForArrival(state['World']['nr_ticks'])
+                                self.waitingForArrival(state['World']['nr_ticks'])
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._sendMessage('Lets remove stones blocking ' + str(self._door['room_name']) + '!','RescueBot')
+                                self.hasArrived(state['World']['nr_ticks'])
                                 return None, {}
                         # Remain idle until the human communicates what to do with the identified obstacle
                         else:
@@ -622,11 +623,12 @@ class BaselineAgent(ArtificialBrain):
                         objects.append(info)
                         # Remain idle when the human has not arrived at the location
                         if not self._humanName in info['name']:
-                            self._waiting = self.waitingForResponse(state['World']['nr_ticks'])
+                            self._waiting = self.waitingForArrival(state['World']['nr_ticks'])
                             self._moving = False
                             return None, {}
                 # Add the victim to the list of rescued victims when it has been picked up
                 if len(objects) == 0 and 'critical' in self._goalVic or len(objects) == 0 and 'mild' in self._goalVic and self._rescue=='together':
+                    self.hasArrived(state['World']['nr_ticks'])
                     self._waiting = False
                     if self._goalVic not in self._collectedVictims:
                         self._collectedVictims.append(self._goalVic)
@@ -885,15 +887,24 @@ class BaselineAgent(ArtificialBrain):
         # print(self._allMessages_CUSTOM)
         responseWaitTicks = []
         respondedTicks = []
+        notArrivedTicks = []
+        arrivedTicks = []
         for content, tick in self._lazyMessages_CUSTOM:
             if 'response' in content:
                 responseWaitTicks.append(tick)
             elif 'responding' in content:
                 respondedTicks.append(tick)
+            elif 'arrival' in content:
+                notArrivedTicks.append(tick)
+            elif 'arrived' in content:
+                arrivedTicks.append(tick)
         for response, responded in zip(responseWaitTicks, respondedTicks):
             if responded - response > 10:
                 currentWillingness -= (responded - response) * 0.00005
-        # print(currentWillingness)
+        for waiting, came in zip(notArrivedTicks, arrivedTicks):
+            if came - waiting > 50:
+                currentWillingness -= (came - waiting) * 0.0005
+        print(currentWillingness)
         
         for idx, (message, sender) in enumerate(self._allMessages_CUSTOM):
             if idx != 0:
@@ -1048,10 +1059,11 @@ class BaselineAgent(ArtificialBrain):
         '''
         msg = Message(content="Thank you for responding!", from_id="RescueBot")
         msg.tick = currentTick
-        print(msg.tick)
-        print("ticks responded")
-        self.send_message(msg)
-        self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
+        if len(self._lazyMessages_CUSTOM) == 0 or msg.content not in self._lazyMessages_CUSTOM[-1]:
+            print(msg.tick)
+            print("ticks responded")
+            self.send_message(msg)
+            self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
         return True
 
     def waitingForResponse(self, currentTick):
@@ -1060,10 +1072,12 @@ class BaselineAgent(ArtificialBrain):
         '''
         msg = Message(content="I am waiting for your response", from_id="RescueBot")
         msg.tick = currentTick
-        print(msg.tick)
-        print("ticks waiting for response")
-        self.send_message(msg)
-        self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
+        # check if last message is the same to not send multiple messages
+        if len(self._lazyMessages_CUSTOM) == 0 or msg.content not in self._lazyMessages_CUSTOM[-1]:
+            print(msg.tick)
+            print("ticks waiting for response")
+            self.send_message(msg)
+            self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
         return True
 
     def waitingForArrival(self, currentTick):
@@ -1072,10 +1086,11 @@ class BaselineAgent(ArtificialBrain):
         '''
         msg = Message(content="I am waiting for your arrival", from_id="RescueBot")
         msg.tick = currentTick
-        print(msg.tick)
-        print("ticks waiting for arrival")
-        self.send_message(msg)
-        self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
+        if len(self._lazyMessages_CUSTOM) == 0 or msg.content not in self._lazyMessages_CUSTOM[-1]:
+            print(msg.tick)
+            print("ticks waiting for arrival")
+            self.send_message(msg)
+            self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
         return True
 
     def hasArrived(self, currentTick):
@@ -1084,8 +1099,9 @@ class BaselineAgent(ArtificialBrain):
         '''
         msg = Message(content="You have arrived!", from_id="RescueBot")
         msg.tick = currentTick
-        print(msg.tick)
-        print("ticks arrived")
-        self.send_message(msg)
-        self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
+        if len(self._lazyMessages_CUSTOM) == 0 or msg.content not in self._lazyMessages_CUSTOM[-1]:
+            print(msg.tick)
+            print("ticks arrived")
+            self.send_message(msg)
+            self._lazyMessages_CUSTOM.append((msg.content, msg.tick))
         return True
