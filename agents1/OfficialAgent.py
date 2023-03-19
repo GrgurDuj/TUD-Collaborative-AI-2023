@@ -1,5 +1,6 @@
 import sys, random, enum, ast, time, csv
 import numpy as np
+import matplotlib.pyplot as plt
 from matrx import grid_world
 from brains1.ArtificialBrain import ArtificialBrain
 from actions1.CustomActions import *
@@ -181,6 +182,24 @@ class BaselineAgent(ArtificialBrain):
                     self._remaining = remaining
                 # Remain idle if there are no victims left to rescue
                 if not remainingZones:
+                    xaxis = []
+                    competences = []
+                    willingnesses = []
+                    with open(self._folder + '/beliefs/currentTrustBeliefs.csv', mode='r') as file:
+                        data = csv.reader(file, delimiter=';')
+                        for idx, row in enumerate(data):
+                            if row:
+                                xaxis.append(idx)
+                                competences.append(float(row[1]))
+                                willingnesses.append(float(row[2]))
+                        print(competences)
+                        print(willingnesses)
+                        plt.plot(xaxis, competences, color='b', marker='o', label='competence')
+                        plt.plot(xaxis, willingnesses, color='r', marker='o', label='willingness')
+                        plt.xlabel('Iteration')
+                        plt.ylabel('Beliefs')
+                        plt.legend()
+                        plt.show()
                     return None, {}
 
                 # Check which victims can be rescued next because human or agent already found them             
@@ -348,11 +367,13 @@ class BaselineAgent(ArtificialBrain):
                             if not self._remove:
                                 self._answered = self.hasResponded(state['World']['nr_ticks'], True)
                             # Tell the human to come over and be idle untill human arrives
+
                             if not state[{'is_human_agent': True}]:
                                 self._sendMessage('Please come to ' + str(self._door['room_name']) + ' to remove rock.','RescueBot')
                                 self.waitingForArrival(state['World']['nr_ticks'])
                                 return None, {}
                             # Tell the human to remove the obstacle when he/she arrives
+
                             if state[{'is_human_agent': True}]:
                                 self._sendMessage('Lets remove rock blocking ' + str(self._door['room_name']) + '!','RescueBot')
                                 self.hasArrived(state['World']['nr_ticks'])
@@ -892,12 +913,7 @@ class BaselineAgent(ArtificialBrain):
         currentWillingness = trustBeliefs[self._humanName]['willingness']
         baseAwardCompetence = self.sigmoidDiv7(currentCompetence)
         baseAwardWillingness = self.sigmoidDiv7(currentWillingness)
-        # print(currentCompetence, currentWillingness, "current comp, current will")
-        # print(baseAwardCompetence, baseAwardWillingness, "award comp, award will")
-        # Update the trust value based on for example the received messages
-        # print(self._searchLogDict_CUSTOM)
-        # print(self._sendMessages)
-        # print(self._allMessages_CUSTOM)
+
         responseWaitTicks = []
         respondedTicks = []
         notArrivedTicks = []
@@ -917,7 +933,7 @@ class BaselineAgent(ArtificialBrain):
         for waiting, came in zip(notArrivedTicks, arrivedTicks):
             if came - waiting > 50:
                 currentWillingness -= (came - waiting) * 0.0005
-        #print(currentWillingness)
+
         
         for idx, (message, sender) in enumerate(self._allMessages_CUSTOM):
             if idx != 0:
@@ -941,24 +957,26 @@ class BaselineAgent(ArtificialBrain):
                 #When human comes to help rescue a mild victim, increase willingness and competence        
                 if sender == "human" and "Rescue together" in message:
                     currentWillingness += baseAwardWillingness
-                if sender == "human" and "Remove" in message: #removing big rock
+                if sender == "human" and "Remove" in message:
                     currentWillingness += baseAwardWillingness
 
-                # if sender == "human" and "Remove alone" in message:
-                #     #TODO
-                # if sender == "human" and "Remove together" in message:
-                #     #TODO
-
-                
+                #removing small rock
+                # if human is close and doesnt want to help, reduce willingness
+                if sender == "human" and "Remove alone" in message:
+                    if "distance between us: close" in prev_message:
+                        currentWillingness -= baseAwardWillingness
+                # if human wants to help, increase willingness
+                if sender == "human" and "Remove together" in message:
+                    currentWillingness += baseAwardWillingness
 
         for idx, message in enumerate(self._sendMessages):
             # print(message)
             # decrease competence if human lies about finding a victim in an area. (critical is higher pentalty than mild)
             if "not present" in message:
                 if "critically" in message:
-                    currentCompetence -= 0.4 - baseAwardCompetence
+                    currentWillingness -= 0.4 - baseAwardWillingness
                 if "mildly" in message: #only happens with 'weak' human
-                    currentCompetence -= 0.2 - baseAwardCompetence
+                    currentWillingness -= 0.2 - baseAwardWillingness
             #When all the rooms have been searched but not all victims have been found
             if "re-search all areas" in message:
                 #I think we should decrease the competence more than the willingness
@@ -978,15 +996,13 @@ class BaselineAgent(ArtificialBrain):
             #increase willingness bc they're willing to do the task (faster in the case of normal/strong)
             if "Lets remove" in message:
                 if "stones" in message:
-                    currentCompetence -= baseAwardCompetence
+                    currentCompetence -= (0.3 - baseAwardCompetence)
                     currentWillingness += baseAwardWillingness
-            
-        
-        for idx, message in enumerate(receivedMessages):            
-            #TODO: use trustBeliefs[self._humanName]['competence'] instead of currentCompetence
+
+        for idx, message in enumerate(receivedMessages):
             if 'Collect' in message: 
                 #this will only be called for mildly injured victim (don't need to specify)
-                currentCompetence += 2* baseAwardCompetence
+                currentCompetence += 0.2 + baseAwardCompetence
                 currentWillingness += baseAwardWillingness
             
             if 'Search' in message:
@@ -1002,16 +1018,17 @@ class BaselineAgent(ArtificialBrain):
 
         currentCompetence = np.clip(currentCompetence, -1, 1)
         currentWillingness = np.clip(currentWillingness, -1, 1)
-        # print("current competence: ", currentCompetence)
-        # print("current willingness: ", currentWillingness)
-
-        # print("\n")
 
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['name','competence','willingness'])
-            csv_writer.writerow([self._humanName,currentCompetence,currentWillingness])
+            csv_writer.writerow(['name', 'competence', 'willingness'])
+            csv_writer.writerow([self._humanName, currentCompetence, currentWillingness])
+
+        # Append all session beliefs into a file to graph
+        with open(folder + '/beliefs/currentTrustBeliefs.csv', mode='a+') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow([self._humanName, currentCompetence, currentWillingness])
 
         return trustBeliefs
 
@@ -1024,6 +1041,7 @@ class BaselineAgent(ArtificialBrain):
             self.send_message(msg)
             self._sendMessages.append(msg.content)
             self._allMessages_CUSTOM.append((msg.content, "robot"))
+
         # Sending the hidden score message (DO NOT REMOVE)
         if 'Our score is' in msg.content:
             self.send_message(msg)
