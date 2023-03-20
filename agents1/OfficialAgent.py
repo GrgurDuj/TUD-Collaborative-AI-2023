@@ -322,7 +322,7 @@ class BaselineAgent(ArtificialBrain):
                 objects = []
                 agent_location = state[self.agent_id]['location']
                 # Identify which obstacle is blocking the entrance
-                self._waitingTime = self._waitingTime + 0.01
+                self._waitingTime = self._waitingTime + 0.01#increment the waitingTime
                 for info in state.values():
 
 
@@ -335,8 +335,8 @@ class BaselineAgent(ArtificialBrain):
                                 \n clock - removal time: 5 seconds \n afstand - distance between us: ' + self._distanceHuman ,'RescueBot')
                             self._waiting = self.waitingForResponse(state['World']['nr_ticks'])
                         # Determine the next area to explore if the human tells the agent not to remove the obstacle
-                        if (self.received_messages_content and self.received_messages_content[-1] == 'Continue' and not self._remove) or self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1):#wait on human for some time, if too long, move on
-                            if self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1):
+                        if (self.received_messages_content and self.received_messages_content[-1] == 'Continue' and not self._remove) or self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1):#wait for human response, if it takes too long, then move on
+                            if self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1): #check if the bot was forced to make his own decision
                                 self._answered = self.hasResponded(state['World']['nr_ticks'],False)
                             else:
                                 self._answered = self.hasResponded(state['World']['nr_ticks'],True)
@@ -381,9 +381,9 @@ class BaselineAgent(ArtificialBrain):
                             self._tosearch.append(self._door['room_name'])
                             self._phase = Phase.FIND_NEXT_GOAL
                         # Remove the obstacle if the human tells the agent to do so
-                        if (self.received_messages_content and self.received_messages_content[-1] == 'Remove' or self._remove) or self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1):#wait on human for some time, if too long, remove tree
+                        if (self.received_messages_content and self.received_messages_content[-1] == 'Remove' or self._remove) or self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1):#wait on human for response, if it takes too long, remove the tree
                             if not self._remove:
-                                if self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1):
+                                if self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1):#check if the bot was forced to make his own decision
                                     self._answered = self.hasResponded(state['World']['nr_ticks'], False)
                                 else:
                                     self._answered = self.hasResponded(state['World']['nr_ticks'], True)
@@ -418,9 +418,9 @@ class BaselineAgent(ArtificialBrain):
                             self._tosearch.append(self._door['room_name'])
                             self._phase = Phase.FIND_NEXT_GOAL
                         # Remove the obstacle alone if the human decides so
-                        if (self.received_messages_content and self.received_messages_content[-1] == 'Remove alone' and not self._remove) or self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1) or trustBeliefs[self._humanName]['competence'] < 0:
+                        if (self.received_messages_content and self.received_messages_content[-1] == 'Remove alone' and not self._remove) or self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1) or trustBeliefs[self._humanName]['competence'] < 0: #wait on human for response, if it takes too long, remove the rock yourself OR if the human is too incompetent also do it yourself
                             if trustBeliefs[self._humanName]['competence'] < 0:
-                                if (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1)):
+                                if (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1)):#check if the bot was forced to make his own decision
                                     self._sendMessage('Removing stones blocking ' + str(self._door['room_name']) + ' because you took too long to help.','RescueBot')
                                     self._answered = self.hasResponded(state['World']['nr_ticks'], False)
                                 else:
@@ -545,7 +545,7 @@ class BaselineAgent(ArtificialBrain):
 
                     # Execute move actions to explore the area
                     return action, {}
-                self._waitingTime = self._waitingTime + 0.01
+                self._waitingTime = self._waitingTime + 0.01#increment the waitingTime
                 # Communicate that the agent did not find the target victim in the area while the human previously communicated the victim was located here
                 if self._goalVic in self._foundVictims and self._goalVic not in self._roomVics and self._foundVictimLocs[self._goalVic]['room'] == self._door['room_name']:
                     self._waitingTime = 0
@@ -589,8 +589,8 @@ class BaselineAgent(ArtificialBrain):
                     self._recentVic = None
                     self._phase = Phase.PLAN_PATH_TO_VICTIM
                 # Make a plan to rescue the mildly injured victim alone if the human decides so, and communicate this to the human
-                if (self.received_messages_content and self.received_messages_content[-1] == 'Rescue alone' and 'mild' in self._recentVic) or (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1) and not (self._recentVic is None) and 'mild' in self._recentVic):
-                    if (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1)):
+                if (self.received_messages_content and self.received_messages_content[-1] == 'Rescue alone' and 'mild' in self._recentVic) or (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1) and not (self._recentVic is None) and 'mild' in self._recentVic):#check if the victim is mild and if the waiting time is too long
+                    if (self._waitingTime > 25*(trustBeliefs[self._humanName]['willingness'] + 1)):#check if the bot was forced to make his own decision
                         self._sendMessage('Picking up ' + self._recentVic + ' in ' + self._door['room_name'] + ' because human took too long to respond' + '.','RescueBot')
                         self._answered = self.hasResponded(state['World']['nr_ticks'],False)
                     else:
@@ -604,8 +604,8 @@ class BaselineAgent(ArtificialBrain):
                     self._recentVic = None
                     self._phase = Phase.PLAN_PATH_TO_VICTIM
                 # Continue searching other areas if the human decides so
-                if (self.received_messages_content and self.received_messages_content[-1] == 'Continue') or (self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1) and not (self._recentVic is None) and 'critical' in self._recentVic):
-                    if (self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1)):
+                if (self.received_messages_content and self.received_messages_content[-1] == 'Continue') or (self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1) and not (self._recentVic is None) and 'critical' in self._recentVic):#if the human decides to continue or if the human does not respond about a critical victim, move on
+                    if (self._waitingTime > 5+25*(trustBeliefs[self._humanName]['willingness'] + 1)):#check if the bot was forced to make his own decision
                         self._sendMessage('human took too long to help with critical victim so he will be rescued later','RescueBot')
                         self._answered = self.hasResponded(state['World']['nr_ticks'], False)
                     else:
@@ -748,7 +748,7 @@ class BaselineAgent(ArtificialBrain):
                 if msg.startswith("Search:"):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._searchedRooms:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add area to memory if the willingness is too low
                             self._searchedRooms.append(area)
 
                 # If a received message involves team members finding victims, add these victims and their locations to memory
@@ -761,16 +761,16 @@ class BaselineAgent(ArtificialBrain):
                     loc = 'area ' + msg.split()[-1]
                     # Add the area to the memory of searched areas
                     if loc not in self._searchedRooms:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add area to memory if the willingness is too low
                             self._searchedRooms.append(loc)
 
                     # Add the victim and its location to memory
                     if foundVic not in self._foundVictims:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't victim and area to memory if the willingness is too low
                             self._foundVictims.append(foundVic)
                             self._foundVictimLocs[foundVic] = {'room': loc}
 
-                    if foundVic in self._foundVictims and self._foundVictimLocs[foundVic]['room'] != loc:
+                    if foundVic in self._foundVictims and self._foundVictimLocs[foundVic]['room'] != loc:#don't add area to memory if the willingness is too low
                         if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
                             self._foundVictimLocs[foundVic] = {'room': loc}
 
@@ -791,23 +791,23 @@ class BaselineAgent(ArtificialBrain):
                     loc = 'area ' + msg.split()[-1]
                     # Add the area to the memory of searched areas
                     if loc not in self._searchedRooms:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add area to memory if the willingness is too low
                             self._searchedRooms.append(loc)
 
 
                     # Add the victim and location to the memory of found victims
                     if collectVic not in self._foundVictims:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add victim to memory if the willingness is too low
                             self._foundVictims.append(collectVic)
                             self._foundVictimLocs[collectVic] = {'room': loc}
 
                     if collectVic in self._foundVictims and self._foundVictimLocs[collectVic]['room'] != loc:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add victim to memory if the willingness is too low
                             self._foundVictimLocs[collectVic] = {'room': loc}
 
                     # Add the victim to the memory of rescued victims when the human's condition is not weak
                     if condition!='weak' and collectVic not in self._collectedVictims:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:#don't add victim to memory if the willingness is too low
                             self._collectedVictims.append(collectVic)
 
                     # Decide to help the human carry the victim together when the human's condition is weak
@@ -817,7 +817,7 @@ class BaselineAgent(ArtificialBrain):
                 if msg.startswith('Remove:'):
                     # Come over immediately when the agent is not carrying a victim
                     if not self._carrying:
-                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0:
+                        if trustbeliefsInProcess[self._humanName]['willingness'] > 0.0: #don't help the human with his requests if his willingness is too low
                             # Identify at which location the human needs help
                             area = 'area ' + msg.split()[-1]
                             self._door = state.get_room_doors(area)[0]
@@ -1076,7 +1076,7 @@ class BaselineAgent(ArtificialBrain):
         if (actuallyResponded):
             msg = Message(content="Thank you for responding!", from_id="RescueBot")
         else:
-            msg = Message(content="you did not respond ):", from_id="RescueBot")
+            msg = Message(content="you did not respond ):", from_id="RescueBot") #if the human took too long to respond this message will be shown
         msg.tick = currentTick
         if len(self._lazyMessages_CUSTOM) == 0 or msg.content not in self._lazyMessages_CUSTOM[-1]:
             #print(msg.tick)
