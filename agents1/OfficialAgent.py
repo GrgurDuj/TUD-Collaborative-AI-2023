@@ -182,24 +182,7 @@ class BaselineAgent(ArtificialBrain):
                     self._remaining = remaining
                 # Remain idle if there are no victims left to rescue
                 if not remainingZones:
-                    xaxis = []
-                    competences = []
-                    willingnesses = []
-                    with open(self._folder + '/beliefs/currentTrustBeliefs.csv', mode='r') as file:
-                        data = csv.reader(file, delimiter=';')
-                        for idx, row in enumerate(data):
-                            if row:
-                                xaxis.append(idx)
-                                competences.append(float(row[1]))
-                                willingnesses.append(float(row[2]))
-                        print(competences)
-                        print(willingnesses)
-                        plt.plot(xaxis, competences, color='b', marker='o', label='competence')
-                        plt.plot(xaxis, willingnesses, color='r', marker='o', label='willingness')
-                        plt.xlabel('Iteration')
-                        plt.ylabel('Beliefs')
-                        plt.legend()
-                        plt.show()
+                    
                     return None, {}
 
                 # Check which victims can be rescued next because human or agent already found them             
@@ -339,7 +322,7 @@ class BaselineAgent(ArtificialBrain):
                 objects = []
                 agent_location = state[self.agent_id]['location']
                 # Identify which obstacle is blocking the entrance
-                self._waitingTime = self._waitingTime + 0.1
+                self._waitingTime = self._waitingTime + 0.01
                 for info in state.values():
 
 
@@ -562,7 +545,7 @@ class BaselineAgent(ArtificialBrain):
 
                     # Execute move actions to explore the area
                     return action, {}
-                self._waitingTime = self._waitingTime + 0.1
+                self._waitingTime = self._waitingTime + 0.01
                 # Communicate that the agent did not find the target victim in the area while the human previously communicated the victim was located here
                 if self._goalVic in self._foundVictims and self._goalVic not in self._roomVics and self._foundVictimLocs[self._goalVic]['room'] == self._door['room_name']:
                     self._waitingTime = 0
@@ -934,7 +917,7 @@ class BaselineAgent(ArtificialBrain):
                 currentWillingness -= (responded - response) * 0.00005
         for waiting, came in zip(notArrivedTicks, arrivedTicks):
             if came - waiting > 50:
-                currentWillingness -= (came - waiting) * 0.0005
+                currentWillingness -= (came - waiting + 200) * 0.0005
 
         
         for idx, (message, sender) in enumerate(self._allMessages_CUSTOM):
@@ -1016,7 +999,7 @@ class BaselineAgent(ArtificialBrain):
 
         # When the bot has found a victim, lower half the competence amount that would be added
         for vic in self._botSavedVictims_CUSTOM:
-            currentCompetence -= baseAwardCompetence/2
+            currentCompetence -= baseAwardCompetence/2 
 
         currentCompetence = np.clip(currentCompetence, -1, 1)
         currentWillingness = np.clip(currentWillingness, -1, 1)
@@ -1084,7 +1067,7 @@ class BaselineAgent(ArtificialBrain):
         return locs
 
     def sigmoidDiv7(self, x):
-        return (1 / (1 + np.exp(-x))) / 7
+        return (1 / (1 + np.exp(-x))) / 10
 
     def hasResponded(self, currentTick, actuallyResponded):
         '''

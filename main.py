@@ -40,4 +40,5 @@ if __name__ == "__main__":
     if choice1=="official":
         # Generate one final output log file for the official task type
         output_logger(fld)
+
     builder.stop()

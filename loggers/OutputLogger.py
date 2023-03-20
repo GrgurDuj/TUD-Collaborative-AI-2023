@@ -3,6 +3,7 @@ import sys
 import csv
 import glob
 import pathlib
+import matplotlib.pyplot as plt
 
 def output_logger(fld):
     recent_dir = max(glob.glob(os.path.join(fld, '*/')), key=os.path.getmtime)
@@ -57,3 +58,23 @@ def output_logger(fld):
     with open(fld + '/beliefs/allTrustBeliefs.csv', mode='a+') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow([name,competence,willingness])
+    
+    xaxis = []
+    competences = []
+    willingnesses = []
+    with open(fld + '/beliefs/currentTrustBeliefs.csv', mode='r') as file:
+        data = csv.reader(file, delimiter=';')
+        for idx, row in enumerate(data):
+            if row:
+                xaxis.append(idx)
+                competences.append(float(row[1]))
+                willingnesses.append(float(row[2]))
+        print(competences)
+        print(willingnesses)
+        plt.plot(xaxis, competences, color='b', marker='o', label='competence')
+        plt.plot(xaxis, willingnesses, color='r', marker='o', label='willingness')
+        plt.xlabel('Iteration')
+        plt.ylabel('Beliefs')
+        plt.ylim(-1,1)
+        plt.legend()
+        plt.show()
